@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Chat bubble back shadow/glow -->
+    <path
+        android:pathData="M34,30 h36 c8.84,0 16,7.16 16,16 v16 c0,8.84 -7.16,16 -16,16 h-18 l-14,10 v-10 h-4 c-8.84,0 -16,-7.16 -16,-16 v-16 c0,-8.84 7.16,-16 16,-16 z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="26"
+                android:startY="30"
+                android:endX="86"
+                android:endY="88">
+                <item android:offset="0.0" android:color="#00E5FF" />
+                <item android:offset="1.0" android:color="#0066FF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <!-- Paper airplane / send arrow icon inside -->
+    <path
+        android:pathData="M43,46 l26,8 -26,8 5,-8 z"
+        android:fillColor="#FFFFFF" />
+    <path
+        android:pathData="M48,54 l21,0"
+        android:strokeColor="#0066FF"
+        android:strokeWidth="1.8"
+        android:strokeLineCap="round" />
+</vector>

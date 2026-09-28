@@ -1,0 +1,6 @@
+{
+  "summary":  "Plan de implementación integral para Nexus Chat: eliminación completa de Moodle en la UI, verificación de usuarios y duplicados en tiempo real, creación y administración de grupos con roles y grupo general por defecto, visor interactivo de perfiles de usuario y motor de mensajería basado en paquetes JSON con interfaz OLED Glassmorphism.",
+  "updatedAt":  "2026-09-28T07:41:14.905190298Z",
+  "requestFeedback":  true,
+  "userFacing":  true
+}
