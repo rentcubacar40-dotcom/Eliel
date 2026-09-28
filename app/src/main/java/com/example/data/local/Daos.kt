@@ -82,6 +82,9 @@ interface MessageDao {
 
     @Query("DELETE FROM messages WHERE chatId = :chatId")
     suspend fun deleteMessagesForChat(chatId: String)
+
+    @Query("UPDATE messages SET attachmentUrl = NULL, attachmentName = NULL, attachmentSize = 0 WHERE id = :messageId")
+    suspend fun clearAttachment(messageId: String)
 }
 
 @Dao
@@ -121,4 +124,19 @@ interface GroupMemberDao {
 
     @Query("DELETE FROM group_members WHERE chatId = :chatId")
     suspend fun deleteMembersForChat(chatId: String)
+}
+
+@Dao
+interface StatusDao {
+    @Query("SELECT * FROM statuses WHERE expiresAt > :currentTime ORDER BY createdAt DESC")
+    fun getActiveStatusesFlow(currentTime: Long): Flow<List<StatusEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertStatus(status: StatusEntity)
+
+    @Query("DELETE FROM statuses WHERE id = :id")
+    suspend fun deleteStatusById(id: String)
+
+    @Query("DELETE FROM statuses WHERE expiresAt <= :currentTime")
+    suspend fun deleteExpiredStatuses(currentTime: Long)
 }

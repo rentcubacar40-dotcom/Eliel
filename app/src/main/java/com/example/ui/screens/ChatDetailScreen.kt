@@ -42,6 +42,8 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AttachFile
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Done
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.Image
@@ -51,6 +53,7 @@ import androidx.compose.material.icons.filled.OpenInBrowser
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -64,6 +67,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -99,7 +103,11 @@ import com.example.ui.components.GroupInfoDialog
 import com.example.ui.components.TelegramAvatar
 import com.example.ui.components.UserProfileDialog
 import com.example.ui.theme.CheckmarkBlue
+import com.example.ui.theme.CyberNeonCyan
+import com.example.ui.theme.ErrorRed
+import com.example.ui.theme.NexusGold
 import com.example.ui.theme.NexusPrimary
+import com.example.ui.theme.OnlineGreen
 import com.example.ui.theme.TelegramDarkIncomingBubble
 import com.example.ui.theme.TelegramDarkOutgoingBubble
 import kotlinx.coroutines.launch
@@ -133,6 +141,8 @@ fun ChatDetailScreen(
     var exportedJsonText by remember { mutableStateOf("") }
     var selectedImageForViewer by remember { mutableStateOf<String?>(null) }
     var menuExpanded by remember { mutableStateOf(false) }
+    var showClearChatDialog by remember { mutableStateOf(false) }
+    var selectedMessageForOptions by remember { mutableStateOf<MessageEntity?>(null) }
 
     val listState = rememberLazyListState()
 
@@ -207,12 +217,23 @@ fun ChatDetailScreen(
                                 activeChat?.type == "GROUP" -> activeChat?.description?.takeIf { it.isNotBlank() } ?: "Grupo"
                                 else -> "en línea"
                             }
-                            Text(
-                                text = subtitle,
-                                fontSize = 12.sp,
-                                color = if (isOwnerChat) Color(0xFFFFB300) else MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = if (isOwnerChat) FontWeight.SemiBold else FontWeight.Normal
-                            )
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (!isOwnerChat && activeChat?.type != "GROUP") {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(7.dp)
+                                            .clip(CircleShape)
+                                            .background(Color(0xFF00E676))
+                                    )
+                                    Spacer(modifier = Modifier.width(5.dp))
+                                }
+                                Text(
+                                    text = subtitle,
+                                    fontSize = 12.sp,
+                                    color = if (isOwnerChat) Color(0xFFFFB300) else if (activeChat?.type != "GROUP") Color(0xFF00E676) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    fontWeight = if (isOwnerChat) FontWeight.SemiBold else FontWeight.Normal
+                                )
+                            }
                         }
                     }
                 },
@@ -253,6 +274,14 @@ fun ChatDetailScreen(
                                     }
                                 },
                                 leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Vaciar chat (Borrar historial local)") },
+                                onClick = {
+                                    menuExpanded = false
+                                    showClearChatDialog = true
+                                },
+                                leadingIcon = { Icon(Icons.Default.DeleteSweep, contentDescription = null, tint = ErrorRed) }
                             )
                         }
                     }
@@ -459,6 +488,9 @@ fun ChatDetailScreen(
                     },
                     onSenderClick = { senderId ->
                         viewModel.inspectUser(senderId)
+                    },
+                    onBubbleClick = {
+                        selectedMessageForOptions = message
                     }
                 )
             }
@@ -677,6 +709,134 @@ fun ChatDetailScreen(
             }
         }
     }
+
+    // Message Contextual Options Dialog (Copy, Delete Attachment, Delete Message)
+    if (selectedMessageForOptions != null) {
+        val msg = selectedMessageForOptions!!
+        val isAuthor = msg.isOutgoing || msg.senderId == currentUser?.username
+        val isAdmin = currentUser?.role == "OWNER" || currentUser?.username == "Eliel_21"
+        val canDelete = isAuthor || isAdmin
+
+        AlertDialog(
+            onDismissRequest = { selectedMessageForOptions = null },
+            title = {
+                Text(text = "Opciones del Mensaje", fontWeight = FontWeight.Bold, fontSize = 17.sp)
+            },
+            text = {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    if (msg.text.isNotBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Mensaje", msg.text))
+                                    selectedMessageForOptions = null
+                                }
+                        ) {
+                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.ContentCopy, contentDescription = null, tint = CyberNeonCyan, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text("Copiar texto", fontSize = 14.sp)
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    if (!msg.attachmentUrl.isNullOrBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.deleteAttachment(msg.id)
+                                    selectedMessageForOptions = null
+                                }
+                        ) {
+                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Delete, contentDescription = null, tint = NexusGold, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("Borrar archivo adjunto", fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+                                    Text("Libera espacio local en tu dispositivo", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                    }
+
+                    if (canDelete) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = ErrorRed.copy(alpha = 0.12f),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, ErrorRed.copy(alpha = 0.3f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    viewModel.deleteMessage(msg.id)
+                                    selectedMessageForOptions = null
+                                }
+                        ) {
+                            Row(modifier = Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.Delete, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Column {
+                                    Text("Eliminar mensaje", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = ErrorRed)
+                                    Text(
+                                        if (isAdmin && !isAuthor) "Moderación de Administrador (@Eliel_21)" else "Se borra de la base de datos Room local",
+                                        fontSize = 11.sp,
+                                        color = ErrorRed.copy(alpha = 0.85f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { selectedMessageForOptions = null }) {
+                    Text("Cerrar")
+                }
+            }
+        )
+    }
+
+    // Confirm Clear Chat Dialog
+    if (showClearChatDialog && activeChat != null) {
+        val chat = activeChat!!
+        AlertDialog(
+            onDismissRequest = { showClearChatDialog = false },
+            title = {
+                Text("Vaciar historial del chat", fontWeight = FontWeight.Bold)
+            },
+            text = {
+                Text(
+                    "¿Estás seguro de que deseas vaciar todos los mensajes de \"${chat.title}\"? Se borrarán de la base de datos Room de tu teléfono para liberar almacenamiento.",
+                    fontSize = 13.sp
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        viewModel.clearChat(chat.id)
+                        showClearChatDialog = false
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = ErrorRed)
+                ) {
+                    Text("Vaciar Chat", fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showClearChatDialog = false }) {
+                    Text("Cancelar")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -686,7 +846,8 @@ fun TelegramMessageBubble(
     onImageClick: (String) -> Unit,
     onCopyLink: (String) -> Unit,
     onOpenBrowser: (String) -> Unit,
-    onSenderClick: ((String) -> Unit)? = null
+    onSenderClick: ((String) -> Unit)? = null,
+    onBubbleClick: (() -> Unit)? = null
 ) {
     val isOutgoing = message.isOutgoing
     val alignment = if (isOutgoing) Alignment.End else Alignment.Start
@@ -725,6 +886,9 @@ fun TelegramMessageBubble(
                 .widthIn(min = 80.dp, max = 320.dp)
                 .clip(bubbleShape)
                 .background(bubbleColor)
+                .then(
+                    if (onBubbleClick != null) Modifier.clickable { onBubbleClick() } else Modifier
+                )
                 .padding(horizontal = 10.dp, vertical = 8.dp)
         ) {
             Column {

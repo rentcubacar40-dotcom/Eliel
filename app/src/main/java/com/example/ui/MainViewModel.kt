@@ -93,6 +93,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    // Active Statuses (24h ephemeral updates)
+    val activeStatuses: StateFlow<List<com.example.data.local.StatusEntity>> = repository.getActiveStatusesFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     // Active Chat Entity
     private val _activeChat = MutableStateFlow<ChatEntity?>(null)
     val activeChat: StateFlow<ChatEntity?> = _activeChat.asStateFlow()
@@ -176,11 +180,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _inspectingUser.value = null
     }
 
+    fun loginUser(
+        username: String,
+        pass: String,
+        onComplete: (Boolean, String) -> Unit
+    ) {
+        viewModelScope.launch {
+            val res = repository.loginUser(username, pass)
+            if (res.isSuccess) {
+                _currentScreen.value = Screen.ChatList
+                val u = res.getOrNull()!!
+                val welcome = if (u.role == "OWNER") "¡Bienvenido de nuevo, Administrador @${u.username}!" else "¡Bienvenido a Nexus, @${u.username}!"
+                _snackbarEvent.emit(welcome)
+                onComplete(true, welcome)
+            } else {
+                val err = res.exceptionOrNull()?.message ?: "Error al iniciar sesión"
+                _snackbarEvent.emit(err)
+                onComplete(false, err)
+            }
+        }
+    }
+
     fun registerUser(
         username: String,
         displayName: String,
         bio: String,
         avatarUrl: String,
+        password: String = "",
         onComplete: (Boolean, String) -> Unit
     ) {
         viewModelScope.launch {
@@ -188,7 +214,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 username = username,
                 displayName = displayName,
                 bio = bio,
-                avatarUrl = avatarUrl
+                avatarUrl = avatarUrl,
+                password = password
             )
             if (res.isSuccess) {
                 _currentScreen.value = Screen.ChatList
@@ -477,5 +504,76 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     suspend fun getExportJson(chatId: String): String {
         return repository.exportChatJson(chatId)
+    }
+
+    // --- Message and Storage Operations ---
+
+    fun deleteMessage(messageId: String) {
+        viewModelScope.launch {
+            val res = repository.deleteMessage(messageId)
+            if (res.isSuccess) {
+                _snackbarEvent.emit("Mensaje eliminado localmente")
+            } else {
+                _snackbarEvent.emit("Error al eliminar mensaje: ${res.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    fun deleteAttachment(messageId: String) {
+        viewModelScope.launch {
+            val res = repository.deleteAttachment(messageId)
+            if (res.isSuccess) {
+                _snackbarEvent.emit("Archivo adjunto borrado para liberar espacio")
+            } else {
+                _snackbarEvent.emit("Error al borrar adjunto: ${res.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    fun clearChat(chatId: String) {
+        viewModelScope.launch {
+            val res = repository.clearChatHistory(chatId)
+            if (res.isSuccess) {
+                _snackbarEvent.emit("Historial del chat vaciado (almacenamiento liberado)")
+            } else {
+                _snackbarEvent.emit("Error al vaciar chat: ${res.exceptionOrNull()?.message}")
+            }
+        }
+    }
+
+    // --- Stories / Statuses ---
+
+    fun publishStatus(
+        text: String,
+        mediaUrl: String? = null,
+        backgroundColorHex: String = "#0284C7",
+        onComplete: (Boolean) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val res = repository.publishStatus(text, mediaUrl, backgroundColorHex)
+            if (res.isSuccess) {
+                _snackbarEvent.emit("¡Estado publicado por 24 horas!")
+                onComplete(true)
+            } else {
+                _snackbarEvent.emit("Error al publicar estado: ${res.exceptionOrNull()?.message}")
+                onComplete(false)
+            }
+        }
+    }
+
+    fun deleteStatus(statusId: String) {
+        viewModelScope.launch {
+            repository.deleteStatus(statusId)
+            _snackbarEvent.emit("Estado eliminado")
+        }
+    }
+
+    fun logout() {
+        viewModelScope.launch {
+            repository.logout()
+            _currentScreen.value = Screen.Onboarding
+            _activeChatId.value = null
+            _snackbarEvent.emit("Has cerrado sesión.")
+        }
     }
 }

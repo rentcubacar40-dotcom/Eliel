@@ -5,6 +5,8 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -28,27 +30,38 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Key
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Security
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
+import androidx.compose.material3.TabRowDefaults
+import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -63,11 +76,14 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.data.repository.ChatRepository
 import com.example.ui.MainViewModel
 import com.example.ui.theme.CyberBorder
 import com.example.ui.theme.CyberNeonCyan
@@ -82,17 +98,29 @@ fun SetupProfileScreen(
     viewModel: MainViewModel,
     onSetupComplete: () -> Unit
 ) {
-    var displayName by remember { mutableStateOf("") }
-    var username by remember { mutableStateOf("") }
-    var bio by remember { mutableStateOf("") }
+    // 0 = Iniciar Sesión, 1 = Crear Cuenta
+    var selectedTab by remember { mutableIntStateOf(0) }
+
+    // Login Form State
+    var loginUsername by remember { mutableStateOf("") }
+    var loginPassword by remember { mutableStateOf("") }
+    var showLoginPassword by remember { mutableStateOf(false) }
+
+    // Register Form State
+    var registerDisplayName by remember { mutableStateOf("") }
+    var registerUsername by remember { mutableStateOf("") }
+    var registerPassword by remember { mutableStateOf("") }
+    var showRegisterPassword by remember { mutableStateOf(false) }
+    var registerBio by remember { mutableStateOf("") }
     var avatarUriString by remember { mutableStateOf("") }
 
-    // Validation state
+    // Status / Feedback
     var isSubmitting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var successMessage by remember { mutableStateOf<String?>(null) }
     var isUsernameAvailable by remember { mutableStateOf<Boolean?>(null) }
-    val cleanUsername = username.trim().removePrefix("@")
-    val isAppCreator = cleanUsername.equals("Eliel_21", ignoreCase = true)
+
+    val cleanRegisterUsername = registerUsername.trim().removePrefix("@")
 
     // Android Photo Picker
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -103,23 +131,18 @@ fun SetupProfileScreen(
         }
     }
 
-    // Live real-time check for username availability
-    LaunchedEffect(cleanUsername) {
-        if (cleanUsername.length >= 3) {
-            isUsernameAvailable = viewModel.checkUsernameAvailability(cleanUsername)
+    // Live availability check during registration
+    LaunchedEffect(cleanRegisterUsername) {
+        if (cleanRegisterUsername.length >= 3) {
+            isUsernameAvailable = viewModel.checkUsernameAvailability(cleanRegisterUsername)
         } else {
             isUsernameAvailable = null
         }
     }
 
-    val isValid = cleanUsername.length >= 3 &&
-            isUsernameAvailable == true &&
-            displayName.trim().isNotBlank() &&
-            !isSubmitting
-
     Surface(
         modifier = Modifier.fillMaxSize(),
-        color = Color(0xFF070B12)
+        color = Color(0xFF070B14)
     ) {
         Column(
             modifier = Modifier
@@ -128,19 +151,19 @@ fun SetupProfileScreen(
                 .navigationBarsPadding()
                 .imePadding()
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 20.dp),
+                .padding(horizontal = 20.dp, vertical = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // App Cyber-Glass Emblem
+            // App Emblem / Futuristic Monogram
             Box(
                 modifier = Modifier
-                    .size(76.dp)
+                    .size(80.dp)
                     .clip(CircleShape)
                     .background(
                         Brush.linearGradient(
-                            colors = listOf(CyberNeonCyan, NexusPrimary, NexusViolet)
+                            listOf(CyberNeonCyan, NexusPrimary, NexusViolet)
                         )
                     )
                     .padding(3.dp),
@@ -157,12 +180,12 @@ fun SetupProfileScreen(
                         text = "N",
                         color = CyberNeonCyan,
                         fontWeight = FontWeight.Black,
-                        fontSize = 36.sp
+                        fontSize = 38.sp
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.height(14.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Text(
                 text = "NEXUS CHAT",
@@ -173,345 +196,626 @@ fun SetupProfileScreen(
             )
 
             Text(
-                text = "Plataforma de Mensajería y Red Universitaria",
+                text = "Red Universitaria UCF • Mensajería Local y Segura",
                 fontSize = 12.sp,
                 color = CyberNeonCyan,
-                fontWeight = FontWeight.SemiBold,
+                fontWeight = FontWeight.Medium,
                 letterSpacing = 0.5.sp
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Avatar Selector with Cyber Ring
-            Box(
-                modifier = Modifier
-                    .size(108.dp)
-                    .clip(CircleShape)
-                    .border(
-                        width = 2.dp,
-                        brush = Brush.linearGradient(listOf(CyberNeonCyan, NexusViolet)),
-                        shape = CircleShape
-                    )
-                    .clickable {
-                        photoPickerLauncher.launch(
-                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                        )
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                if (avatarUriString.isNotBlank()) {
-                    AsyncImage(
-                        model = ImageRequest.Builder(LocalContext.current)
-                            .data(avatarUriString)
-                            .crossfade(true)
-                            .build(),
-                        contentDescription = "Foto de perfil",
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clip(CircleShape),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0xFF141E2C)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Default.CameraAlt,
-                                contentDescription = "Elegir foto",
-                                tint = CyberNeonCyan,
-                                modifier = Modifier.size(32.dp)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "Añadir foto",
-                                fontSize = 10.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-
-            Text(
-                text = "Toca para elegir tu foto de perfil",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp)
             )
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            // Registration Form Card
+            // Main Card Container with Modern Tab Selector
             Card(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFF0E1626)),
+                colors = CardDefaults.cardColors(containerColor = Color(0xFF10192A)),
+                shape = RoundedCornerShape(24.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, CyberBorder)
             ) {
-                Column(modifier = Modifier.padding(18.dp)) {
-                    Text(
-                        text = "CREA TU IDENTIDAD",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = CyberNeonCyan,
-                        letterSpacing = 1.sp
-                    )
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Display Name Field
-                    OutlinedTextField(
-                        value = displayName,
-                        onValueChange = {
-                            displayName = it
-                            errorMessage = null
-                        },
-                        label = { Text("Nombre Completo") },
-                        placeholder = { Text("Ej. Eliel Roselló") },
-                        leadingIcon = {
-                            Icon(Icons.Default.Person, contentDescription = null, tint = CyberNeonCyan)
-                        },
-                        singleLine = true,
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp)
+                ) {
+                    // Segmented Tabs
+                    TabRow(
+                        selectedTabIndex = selectedTab,
+                        containerColor = Color(0xFF162238),
+                        contentColor = Color.White,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .testTag("display_name_input"),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyberNeonCyan,
-                            unfocusedBorderColor = CyberBorder,
-                            focusedLabelColor = CyberNeonCyan,
-                            focusedContainerColor = Color(0xFF121B2F),
-                            unfocusedContainerColor = Color(0xFF0F1728)
-                        ),
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Words)
-                    )
+                            .clip(RoundedCornerShape(14.dp)),
+                        indicator = { tabPositions ->
+                            TabRowDefaults.SecondaryIndicator(
+                                Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
+                                color = CyberNeonCyan,
+                                height = 3.dp
+                            )
+                        }
+                    ) {
+                        Tab(
+                            selected = selectedTab == 0,
+                            onClick = {
+                                selectedTab = 0
+                                errorMessage = null
+                                successMessage = null
+                            },
+                            text = {
+                                Text(
+                                    "Iniciar Sesión",
+                                    fontWeight = if (selectedTab == 0) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        )
+                        Tab(
+                            selected = selectedTab == 1,
+                            onClick = {
+                                selectedTab = 1
+                                errorMessage = null
+                                successMessage = null
+                            },
+                            text = {
+                                Text(
+                                    "Crear Cuenta",
+                                    fontWeight = if (selectedTab == 1) FontWeight.Bold else FontWeight.Normal,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        )
+                    }
 
-                    Spacer(modifier = Modifier.height(14.dp))
+                    Spacer(modifier = Modifier.height(18.dp))
 
-                    // Username Field with real-time uniqueness validation
-                    OutlinedTextField(
-                        value = username,
-                        onValueChange = {
-                            username = it.replace(" ", "")
-                            errorMessage = null
-                        },
-                        label = { Text("Nombre de Usuario Único") },
-                        placeholder = { Text("usuario (sin espacios)") },
-                        leadingIcon = {
-                            Icon(Icons.Default.AlternateEmail, contentDescription = null, tint = CyberNeonCyan)
-                        },
-                        trailingIcon = {
-                            when {
-                                cleanUsername.length < 3 -> {}
-                                isUsernameAvailable == true -> {
+                    // Error & Success Feedback Banners
+                    AnimatedVisibility(visible = errorMessage != null) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 14.dp),
+                            colors = CardDefaults.cardColors(containerColor = ErrorRed.copy(alpha = 0.15f)),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, ErrorRed.copy(alpha = 0.4f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Error,
+                                    contentDescription = null,
+                                    tint = ErrorRed,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = errorMessage ?: "",
+                                    color = ErrorRed,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
+                    AnimatedVisibility(visible = successMessage != null) {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 14.dp),
+                            colors = CardDefaults.cardColors(containerColor = OnlineGreen.copy(alpha = 0.15f)),
+                            shape = RoundedCornerShape(12.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, OnlineGreen.copy(alpha = 0.4f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CheckCircle,
+                                    contentDescription = null,
+                                    tint = OnlineGreen,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = successMessage ?: "",
+                                    color = OnlineGreen,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
+                    // --- TAB 0: INICIAR SESIÓN ---
+                    if (selectedTab == 0) {
+                        // Quick Admin Access Chip / Button
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    loginUsername = "@" + ChatRepository.ADMIN_USERNAME
+                                    errorMessage = null
+                                },
+                            colors = CardDefaults.cardColors(
+                                containerColor = NexusGold.copy(alpha = 0.12f)
+                            ),
+                            shape = RoundedCornerShape(14.dp),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, NexusGold.copy(alpha = 0.5f))
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(34.dp)
+                                        .clip(CircleShape)
+                                        .background(NexusGold.copy(alpha = 0.25f)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text("👑", fontSize = 16.sp)
+                                }
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Acceso Rápido Administrador",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 13.sp,
+                                        color = NexusGold
+                                    )
+                                    Text(
+                                        text = "Toca para autorrellenar @Eliel_21",
+                                        fontSize = 11.sp,
+                                        color = NexusGold.copy(alpha = 0.85f)
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Username Field
+                        OutlinedTextField(
+                            value = loginUsername,
+                            onValueChange = {
+                                loginUsername = it
+                                errorMessage = null
+                            },
+                            label = { Text("Usuario (@usuario)") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.AlternateEmail,
+                                    contentDescription = null,
+                                    tint = CyberNeonCyan
+                                )
+                            },
+                            placeholder = { Text("@Eliel_21") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("login_username_input"),
+                            shape = RoundedCornerShape(14.dp),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Ascii,
+                                capitalization = KeyboardCapitalization.None
+                            ),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyberNeonCyan,
+                                unfocusedBorderColor = Color(0xFF24334C),
+                                focusedLabelColor = CyberNeonCyan,
+                                cursorColor = CyberNeonCyan
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        // Password Field
+                        OutlinedTextField(
+                            value = loginPassword,
+                            onValueChange = {
+                                loginPassword = it
+                                errorMessage = null
+                            },
+                            label = { Text("Contraseña") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = CyberNeonCyan
+                                )
+                            },
+                            trailingIcon = {
+                                IconButton(onClick = { showLoginPassword = !showLoginPassword }) {
                                     Icon(
+                                        imageVector = if (showLoginPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = "Mostrar u ocultar contraseña",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            },
+                            visualTransformation = if (showLoginPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("login_password_input"),
+                            shape = RoundedCornerShape(14.dp),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Password
+                            ),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyberNeonCyan,
+                                unfocusedBorderColor = Color(0xFF24334C),
+                                focusedLabelColor = CyberNeonCyan,
+                                cursorColor = CyberNeonCyan
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(18.dp))
+
+                        // Submit Button
+                        Button(
+                            onClick = {
+                                val clean = loginUsername.trim().removePrefix("@")
+                                if (clean.isBlank()) {
+                                    errorMessage = "Por favor ingresa tu nombre de usuario."
+                                    return@Button
+                                }
+                                isSubmitting = true
+                                errorMessage = null
+                                viewModel.loginUser(clean, loginPassword) { success, msg ->
+                                    isSubmitting = false
+                                    if (success) {
+                                        successMessage = msg
+                                        onSetupComplete()
+                                    } else {
+                                        errorMessage = msg
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                                .testTag("login_submit_button"),
+                            shape = RoundedCornerShape(14.dp),
+                            enabled = !isSubmitting,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = NexusPrimary,
+                                disabledContainerColor = NexusPrimary.copy(alpha = 0.5f)
+                            )
+                        ) {
+                            if (isSubmitting) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(22.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.5.dp
+                                )
+                            } else {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Key,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = "Iniciar Sesión en Nexus",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Room Storage Explanatory Banner
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Color(0xFF0D1422)),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Storage,
+                                    contentDescription = null,
+                                    tint = CyberNeonCyan,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Los mensajes se guardan en Room Database dentro de tu teléfono. Puedes leer y escribir sin preocuparte por saturar la nube.",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    lineHeight = 15.sp
+                                )
+                            }
+                        }
+                    }
+
+                    // --- TAB 1: CREAR CUENTA ---
+                    if (selectedTab == 1) {
+                        // Avatar Selector
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterHorizontally)
+                                .size(90.dp)
+                                .clip(CircleShape)
+                                .border(
+                                    width = 2.dp,
+                                    brush = Brush.linearGradient(listOf(CyberNeonCyan, NexusViolet)),
+                                    shape = CircleShape
+                                )
+                                .clickable {
+                                    photoPickerLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (avatarUriString.isNotBlank()) {
+                                AsyncImage(
+                                    model = ImageRequest.Builder(LocalContext.current)
+                                        .data(avatarUriString)
+                                        .crossfade(true)
+                                        .build(),
+                                    contentDescription = "Foto de perfil",
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .clip(CircleShape),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .background(Color(0xFF141F33)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Icon(
+                                            imageVector = Icons.Default.CameraAlt,
+                                            contentDescription = "Elegir foto",
+                                            tint = CyberNeonCyan,
+                                            modifier = Modifier.size(26.dp)
+                                        )
+                                        Text(
+                                            text = "Añadir foto",
+                                            fontSize = 9.sp,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+
+                        // Display Name
+                        OutlinedTextField(
+                            value = registerDisplayName,
+                            onValueChange = {
+                                registerDisplayName = it
+                                errorMessage = null
+                            },
+                            label = { Text("Nombre y Apellidos") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = CyberNeonCyan
+                                )
+                            },
+                            placeholder = { Text("Ej: Carlos Pérez") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("register_name_input"),
+                            shape = RoundedCornerShape(14.dp),
+                            singleLine = true,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyberNeonCyan,
+                                unfocusedBorderColor = Color(0xFF24334C),
+                                focusedLabelColor = CyberNeonCyan,
+                                cursorColor = CyberNeonCyan
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Username Handle (@...)
+                        OutlinedTextField(
+                            value = registerUsername,
+                            onValueChange = {
+                                registerUsername = it
+                                errorMessage = null
+                            },
+                            label = { Text("Usuario (@usuario)") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.AlternateEmail,
+                                    contentDescription = null,
+                                    tint = CyberNeonCyan
+                                )
+                            },
+                            trailingIcon = {
+                                when (isUsernameAvailable) {
+                                    true -> Icon(
                                         imageVector = Icons.Default.CheckCircle,
                                         contentDescription = "Disponible",
                                         tint = OnlineGreen
                                     )
-                                }
-                                isUsernameAvailable == false -> {
-                                    Icon(
+                                    false -> Icon(
                                         imageVector = Icons.Default.Error,
-                                        contentDescription = "Ocupado",
+                                        contentDescription = "No disponible",
                                         tint = ErrorRed
                                     )
+                                    null -> null
                                 }
-                            }
-                        },
-                        singleLine = true,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("username_input"),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = when {
-                                isUsernameAvailable == true -> OnlineGreen
-                                isUsernameAvailable == false -> ErrorRed
-                                else -> CyberNeonCyan
                             },
-                            unfocusedBorderColor = CyberBorder,
-                            focusedContainerColor = Color(0xFF121B2F),
-                            unfocusedContainerColor = Color(0xFF0F1728)
-                        ),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii)
-                    )
+                            placeholder = { Text("carlos_ucf") },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("register_username_input"),
+                            shape = RoundedCornerShape(14.dp),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Ascii,
+                                capitalization = KeyboardCapitalization.None
+                            ),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyberNeonCyan,
+                                unfocusedBorderColor = Color(0xFF24334C),
+                                focusedLabelColor = CyberNeonCyan,
+                                cursorColor = CyberNeonCyan
+                            )
+                        )
 
-                    // Real-time username feedback badge
-                    Spacer(modifier = Modifier.height(6.dp))
-                    when {
-                        isAppCreator -> {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.padding(start = 4.dp)
-                            ) {
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Password Field
+                        OutlinedTextField(
+                            value = registerPassword,
+                            onValueChange = {
+                                registerPassword = it
+                                errorMessage = null
+                            },
+                            label = { Text("Contraseña") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Lock,
+                                    contentDescription = null,
+                                    tint = CyberNeonCyan
+                                )
+                            },
+                            trailingIcon = {
+                                IconButton(onClick = { showRegisterPassword = !showRegisterPassword }) {
+                                    Icon(
+                                        imageVector = if (showRegisterPassword) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            },
+                            visualTransformation = if (showRegisterPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("register_password_input"),
+                            shape = RoundedCornerShape(14.dp),
+                            singleLine = true,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyberNeonCyan,
+                                unfocusedBorderColor = Color(0xFF24334C),
+                                focusedLabelColor = CyberNeonCyan,
+                                cursorColor = CyberNeonCyan
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Bio Field (Optional)
+                        OutlinedTextField(
+                            value = registerBio,
+                            onValueChange = { registerBio = it },
+                            label = { Text("Biografía (opcional)") },
+                            placeholder = { Text("Estudiante UCF • Facultad de Ingeniería") },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            maxLines = 2,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = CyberNeonCyan,
+                                unfocusedBorderColor = Color(0xFF24334C),
+                                focusedLabelColor = CyberNeonCyan,
+                                cursorColor = CyberNeonCyan
+                            )
+                        )
+
+                        Spacer(modifier = Modifier.height(18.dp))
+
+                        // Register Button
+                        Button(
+                            onClick = {
+                                if (cleanRegisterUsername.length < 3) {
+                                    errorMessage = "El usuario debe tener al menos 3 caracteres."
+                                    return@Button
+                                }
+                                if (registerDisplayName.trim().isBlank()) {
+                                    errorMessage = "Por favor ingresa tu nombre."
+                                    return@Button
+                                }
+                                isSubmitting = true
+                                errorMessage = null
+                                viewModel.registerUser(
+                                    username = cleanRegisterUsername,
+                                    displayName = registerDisplayName.trim(),
+                                    bio = registerBio.trim(),
+                                    avatarUrl = avatarUriString,
+                                    password = registerPassword
+                                ) { success, msg ->
+                                    isSubmitting = false
+                                    if (success) {
+                                        successMessage = msg
+                                        onSetupComplete()
+                                    } else {
+                                        errorMessage = msg
+                                    }
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                                .testTag("register_submit_button"),
+                            shape = RoundedCornerShape(14.dp),
+                            enabled = !isSubmitting,
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = NexusPrimary,
+                                disabledContainerColor = NexusPrimary.copy(alpha = 0.5f)
+                            )
+                        ) {
+                            if (isSubmitting) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(22.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.5.dp
+                                )
+                            } else {
                                 Text(
-                                    text = "👑 Cuenta Oficial del Creador y Propietario de la Aplicación",
-                                    fontSize = 11.sp,
+                                    text = "Crear Cuenta y Entrar",
                                     fontWeight = FontWeight.Bold,
-                                    color = NexusGold
+                                    fontSize = 15.sp
                                 )
                             }
                         }
-                        cleanUsername.length in 1..2 -> {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp)) {
-                                Icon(Icons.Default.Info, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(13.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Mínimo 3 caracteres (solo letras, números y _)",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        isUsernameAvailable == true -> {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp)) {
-                                Icon(Icons.Default.CheckCircle, contentDescription = null, tint = OnlineGreen, modifier = Modifier.size(13.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "✓ @$cleanUsername está disponible en la red",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = OnlineGreen
-                                )
-                            }
-                        }
-                        isUsernameAvailable == false -> {
-                            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 4.dp)) {
-                                Icon(Icons.Default.Error, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(13.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "❌ @$cleanUsername ya existe. Elige otro nombre.",
-                                    fontSize = 11.sp,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = ErrorRed
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // Bio Field
-                    OutlinedTextField(
-                        value = bio,
-                        onValueChange = { bio = it },
-                        label = { Text("Biografía / Carrera / Intereses (Opcional)") },
-                        placeholder = { Text("Ej. Estudiante de Ingeniería Informática UCF...") },
-                        maxLines = 3,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag("bio_input"),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = CyberNeonCyan,
-                            unfocusedBorderColor = CyberBorder,
-                            focusedContainerColor = Color(0xFF121B2F),
-                            unfocusedContainerColor = Color(0xFF0F1728)
-                        )
-                    )
-                }
-            }
-
-            // Error Banner if needed
-            AnimatedVisibility(visible = errorMessage != null) {
-                Card(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp),
-                    colors = CardDefaults.cardColors(containerColor = ErrorRed.copy(alpha = 0.15f)),
-                    shape = RoundedCornerShape(12.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, ErrorRed.copy(alpha = 0.5f))
-                ) {
-                    Row(
-                        modifier = Modifier.padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Icon(Icons.Default.Error, contentDescription = null, tint = ErrorRed, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = errorMessage ?: "",
-                            color = ErrorRed,
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
-                        )
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(18.dp))
 
-            // Enter Nexus Neon Button
-            Button(
-                onClick = {
-                    if (!isValid) return@Button
-                    isSubmitting = true
-                    errorMessage = null
-
-                    viewModel.registerUser(
-                        username = cleanUsername,
-                        displayName = displayName.trim(),
-                        bio = bio.trim(),
-                        avatarUrl = avatarUriString.trim()
-                    ) { success, msg ->
-                        isSubmitting = false
-                        if (success) {
-                            onSetupComplete()
-                        } else {
-                            errorMessage = msg
-                        }
-                    }
-                },
-                enabled = isValid,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp)
-                    .testTag("setup_profile_button"),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = NexusPrimary,
-                    disabledContainerColor = NexusPrimary.copy(alpha = 0.3f)
-                ),
-                elevation = ButtonDefaults.buttonElevation(defaultElevation = 6.dp)
+            // Footer note
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
             ) {
-                if (isSubmitting) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(22.dp),
-                        color = Color.White,
-                        strokeWidth = 2.5.dp
-                    )
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text("Configurando red...", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                } else {
-                    Text(
-                        text = "Entrar a Nexus",
-                        fontWeight = FontWeight.Black,
-                        fontSize = 16.sp,
-                        letterSpacing = 0.5.sp
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowForward,
-                        contentDescription = null,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
+                Icon(
+                    imageVector = Icons.Default.Security,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(14.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    text = "Plataforma protegida con almacenamiento local Room",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            Text(
-                text = "Nexus Chat • 100% Comunicación Real • Sincronización JSON",
-                fontSize = 11.sp,
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
         }
     }
 }

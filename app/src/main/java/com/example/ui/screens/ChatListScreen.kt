@@ -80,9 +80,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.ChatEntity
+import com.example.data.local.StatusEntity
 import com.example.data.local.UserEntity
 import com.example.ui.MainViewModel
 import com.example.ui.Screen
+import com.example.ui.components.CreateStatusDialog
+import com.example.ui.components.StatusStoriesBar
+import com.example.ui.components.StoryViewerDialog
 import com.example.ui.components.TelegramAvatar
 import com.example.ui.components.UserProfileDialog
 import com.example.ui.theme.CheckmarkBlue
@@ -108,11 +112,15 @@ fun ChatListScreen(
     val searchQuery by viewModel.searchQuery.collectAsState()
     val selectedTab by viewModel.selectedTab.collectAsState()
     val inspectingUser by viewModel.inspectingUser.collectAsState()
+    val activeStatuses by viewModel.activeStatuses.collectAsState()
+    val currentUser by viewModel.currentUser.collectAsState()
 
     var isSearchActive by remember { mutableStateOf(false) }
     var showNewChatDialog by remember { mutableStateOf(false) }
     var showNewGroupDialog by remember { mutableStateOf(false) }
     var showFabMenu by remember { mutableStateOf(false) }
+    var showCreateStatusDialog by remember { mutableStateOf(false) }
+    var selectedStatusForViewer by remember { mutableStateOf<StatusEntity?>(null) }
 
     val coroutineScope = rememberCoroutineScope()
 
@@ -336,69 +344,84 @@ fun ChatListScreen(
             }
         }
     ) { paddingValues ->
-        if (chats.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 32.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+        ) {
+            // Stories / Estados bar
+            item {
+                StatusStoriesBar(
+                    statuses = activeStatuses,
+                    currentUser = currentUser,
+                    onAddStatusClick = { showCreateStatusDialog = true },
+                    onStatusClick = { status -> selectedStatusForViewer = status }
+                )
+                HorizontalDivider(
+                    color = CyberBorder,
+                    thickness = 0.5.dp
+                )
+            }
+
+            if (chats.isEmpty()) {
+                item {
                     Box(
                         modifier = Modifier
-                            .size(76.dp)
-                            .clip(CircleShape)
-                            .background(NexusPrimary.copy(alpha = 0.15f)),
+                            .fillMaxWidth()
+                            .padding(horizontal = 32.dp, vertical = 40.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.ChatBubbleOutline,
-                            contentDescription = null,
-                            modifier = Modifier.size(38.dp),
-                            tint = CyberNeonCyan
-                        )
-                    }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box(
+                                modifier = Modifier
+                                    .size(72.dp)
+                                    .clip(CircleShape)
+                                    .background(NexusPrimary.copy(alpha = 0.15f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.ChatBubbleOutline,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(36.dp),
+                                    tint = CyberNeonCyan
+                                )
+                            }
 
-                    Spacer(modifier = Modifier.height(18.dp))
+                            Spacer(modifier = Modifier.height(16.dp))
 
-                    Text(
-                        text = "Sin conversaciones aún",
-                        fontSize = 19.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White
-                    )
+                            Text(
+                                text = "Sin conversaciones aún",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White
+                            )
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(8.dp))
 
-                    Text(
-                        text = "Inicia un chat privado o únete a la comunidad de la UCF para intercambiar mensajes y archivos mediante paquetes JSON.",
-                        fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        lineHeight = 19.sp
-                    )
+                            Text(
+                                text = "Inicia un chat privado o escribe en la comunidad de la UCF para comenzar.",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                lineHeight = 18.sp
+                            )
 
-                    Spacer(modifier = Modifier.height(20.dp))
+                            Spacer(modifier = Modifier.height(18.dp))
 
-                    Button(
-                        onClick = { showNewChatDialog = true },
-                        colors = ButtonDefaults.buttonColors(containerColor = NexusPrimary),
-                        shape = RoundedCornerShape(14.dp),
-                        modifier = Modifier.testTag("btn_empty_start_chat")
-                    ) {
-                        Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Iniciar primer chat", fontWeight = FontWeight.Bold)
+                            Button(
+                                onClick = { showNewChatDialog = true },
+                                colors = ButtonDefaults.buttonColors(containerColor = NexusPrimary),
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.testTag("btn_empty_start_chat")
+                            ) {
+                                Icon(Icons.Default.PersonAdd, contentDescription = null, modifier = Modifier.size(18.dp))
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text("Iniciar primer chat", fontWeight = FontWeight.Bold)
+                            }
+                        }
                     }
                 }
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
+            } else {
                 items(chats, key = { it.id }) { chat ->
                     val isOwnerChat = chat.id.contains("Eliel_21", ignoreCase = true) || chat.title.contains("Eliel", ignoreCase = true)
 
@@ -433,6 +456,34 @@ fun ChatListScreen(
             onDismiss = { viewModel.closeUserInspection() },
             onStartDirectChat = {
                 viewModel.openDirectChatWithInspectedUser()
+            }
+        )
+    }
+
+    // Create 24h Status Dialog
+    if (showCreateStatusDialog) {
+        CreateStatusDialog(
+            currentUser = currentUser,
+            onDismiss = { showCreateStatusDialog = false },
+            onPublish = { text, mediaUrl, colorHex ->
+                viewModel.publishStatus(text, mediaUrl, colorHex) {
+                    showCreateStatusDialog = false
+                }
+            }
+        )
+    }
+
+    // Story / Status Viewer Modal
+    if (selectedStatusForViewer != null) {
+        val status = selectedStatusForViewer!!
+        StoryViewerDialog(
+            status = status,
+            currentUsername = currentUser?.username,
+            isAdmin = currentUser?.role == "OWNER" || currentUser?.username == "Eliel_21",
+            onDismiss = { selectedStatusForViewer = null },
+            onDelete = {
+                viewModel.deleteStatus(status.id)
+                selectedStatusForViewer = null
             }
         )
     }

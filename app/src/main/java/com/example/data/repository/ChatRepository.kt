@@ -27,9 +27,12 @@ class ChatRepository(
     private val messageDao = database.messageDao()
     private val moodleConfigDao = database.moodleConfigDao()
     private val groupMemberDao = database.groupMemberDao()
+    private val statusDao = database.statusDao()
 
     companion object {
         const val GENERAL_GROUP_ID = "group_nexus_general"
+        const val ADMIN_USERNAME = "Eliel_21"
+        const val ADMIN_PASSWORD = "ElielElielAdmin543345.."
     }
 
     val currentUserFlow: Flow<UserEntity?> = userDao.getCurrentUserFlow()
@@ -66,16 +69,22 @@ class ChatRepository(
         }
 
         // 2. Register Application Creator & Owner (@Eliel_21)
-        val existingEliel = userDao.getUserByUsername("Eliel_21")
+        val existingEliel = userDao.getUserByUsername(ADMIN_USERNAME)
         if (existingEliel == null) {
             val elielAdmin = UserEntity(
-                username = "Eliel_21",
+                username = ADMIN_USERNAME,
                 displayName = "Eliel",
                 bio = "👑 Creador y Propietario de Nexus UCF",
                 avatarUrl = "",
-                isCurrentUser = false
+                isCurrentUser = false,
+                password = ADMIN_PASSWORD,
+                role = "OWNER"
             )
             userDao.insertOrUpdate(elielAdmin)
+        } else {
+            userDao.insertOrUpdate(
+                existingEliel.copy(password = ADMIN_PASSWORD, role = "OWNER")
+            )
         }
 
         // 3. Register Official Support user (@soporte_ucf)
@@ -132,11 +141,68 @@ class ChatRepository(
         }
     }
 
+    suspend fun loginUser(username: String, pass: String): Result<UserEntity> = withContext(Dispatchers.IO) {
+        val clean = username.trim().removePrefix("@")
+        if (clean.isBlank()) {
+            return@withContext Result.failure(IllegalArgumentException("Por favor ingresa tu nombre de usuario."))
+        }
+
+        val isAdmin = clean.equals(ADMIN_USERNAME, ignoreCase = true)
+        if (isAdmin) {
+            if (pass != ADMIN_PASSWORD) {
+                return@withContext Result.failure(IllegalArgumentException("Contraseña de administrador incorrecta."))
+            }
+            userDao.clearCurrentUserFlag()
+            val existing = userDao.getUserByUsername(ADMIN_USERNAME) ?: UserEntity(
+                username = ADMIN_USERNAME,
+                displayName = "Eliel",
+                bio = "👑 Creador y Propietario de Nexus UCF",
+                avatarUrl = "",
+                isCurrentUser = true,
+                password = ADMIN_PASSWORD,
+                role = "OWNER"
+            )
+            val updated = existing.copy(
+                isCurrentUser = true,
+                password = ADMIN_PASSWORD,
+                role = "OWNER",
+                lastSeen = System.currentTimeMillis()
+            )
+            userDao.insertOrUpdate(updated)
+            groupMemberDao.insertOrUpdate(
+                GroupMemberEntity(chatId = GENERAL_GROUP_ID, username = ADMIN_USERNAME, role = "OWNER")
+            )
+            return@withContext Result.success(updated)
+        }
+
+        val user = userDao.getUserByUsername(clean)
+        if (user == null) {
+            return@withContext Result.failure(IllegalArgumentException("El usuario @$clean no existe. Ve a la pestaña 'Crear Cuenta' para registrarte."))
+        }
+        if (user.password.isNotBlank() && user.password != pass) {
+            return@withContext Result.failure(IllegalArgumentException("Contraseña incorrecta."))
+        }
+
+        userDao.clearCurrentUserFlag()
+        val loggedInUser = user.copy(isCurrentUser = true, lastSeen = System.currentTimeMillis())
+        userDao.insertOrUpdate(loggedInUser)
+
+        groupMemberDao.insertOrUpdate(
+            GroupMemberEntity(
+                chatId = GENERAL_GROUP_ID,
+                username = clean,
+                role = loggedInUser.role
+            )
+        )
+        Result.success(loggedInUser)
+    }
+
     suspend fun registerInitialUser(
         username: String,
         displayName: String,
         bio: String,
-        avatarUrl: String
+        avatarUrl: String,
+        password: String = ""
     ): Result<UserEntity> = withContext(Dispatchers.IO) {
         val cleanUsername = username.trim().removePrefix("@")
         if (cleanUsername.isBlank()) {
@@ -150,8 +216,13 @@ class ChatRepository(
             return@withContext Result.failure(IllegalArgumentException("El usuario solo puede contener letras, números y guión bajo (_)."))
         }
 
+        val isAdmin = cleanUsername.equals(ADMIN_USERNAME, ignoreCase = true)
+        if (isAdmin && password != ADMIN_PASSWORD) {
+            return@withContext Result.failure(IllegalArgumentException("Para acceder como administrador (@$ADMIN_USERNAME) debes ingresar la clave maestra de admin."))
+        }
+
         val existingUser = userDao.getUserByUsername(cleanUsername)
-        if (existingUser != null && !existingUser.isCurrentUser && !cleanUsername.equals("Eliel_21", ignoreCase = true)) {
+        if (existingUser != null && !existingUser.isCurrentUser && !isAdmin) {
             return@withContext Result.failure(IllegalArgumentException("El nombre de usuario @$cleanUsername ya está en uso en la red."))
         }
 
@@ -164,7 +235,9 @@ class ChatRepository(
             bio = bio.trim(),
             avatarUrl = avatarUrl.trim(),
             isCurrentUser = true,
-            lastSeen = System.currentTimeMillis()
+            lastSeen = System.currentTimeMillis(),
+            password = if (isAdmin) ADMIN_PASSWORD else password.trim(),
+            role = if (isAdmin) "OWNER" else "MEMBER"
         )
         userDao.insertOrUpdate(newUser)
 
@@ -173,7 +246,7 @@ class ChatRepository(
             GroupMemberEntity(
                 chatId = GENERAL_GROUP_ID,
                 username = cleanUsername,
-                role = if (cleanUsername.equals("Eliel_21", ignoreCase = true)) "OWNER" else "MEMBER"
+                role = if (isAdmin) "OWNER" else "MEMBER"
             )
         )
 
@@ -596,5 +669,81 @@ class ChatRepository(
         }
         val jsonStr = downloadRes.getOrNull() ?: ""
         importChatJson(jsonStr)
+    }
+
+    // --- Message Deletion & Storage Management (Telegram-Style) ---
+
+    suspend fun deleteMessage(messageId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            messageDao.deleteMessageById(messageId)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteAttachment(messageId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            messageDao.clearAttachment(messageId)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun clearChatHistory(chatId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            messageDao.deleteMessagesForChat(chatId)
+            chatDao.updateLastMessage(chatId, "Historial vaciado", System.currentTimeMillis())
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    // --- Status / Story Management (24h Ephemeral Updates) ---
+
+    fun getActiveStatusesFlow(): Flow<List<com.example.data.local.StatusEntity>> =
+        statusDao.getActiveStatusesFlow(System.currentTimeMillis())
+
+    suspend fun publishStatus(
+        text: String,
+        mediaUrl: String? = null,
+        backgroundColorHex: String = "#0284C7"
+    ): Result<com.example.data.local.StatusEntity> = withContext(Dispatchers.IO) {
+        val currentUser = userDao.getCurrentUser()
+            ?: return@withContext Result.failure(IllegalStateException("Inicia sesión para publicar un estado."))
+
+        val newStatus = com.example.data.local.StatusEntity(
+            id = "status_${UUID.randomUUID().toString().take(8)}",
+            authorUsername = currentUser.username,
+            authorDisplayName = currentUser.displayName,
+            authorAvatar = currentUser.avatarUrl,
+            text = text.trim(),
+            mediaUrl = mediaUrl,
+            backgroundColorHex = backgroundColorHex,
+            createdAt = System.currentTimeMillis(),
+            expiresAt = System.currentTimeMillis() + 24 * 60 * 60 * 1000L
+        )
+        statusDao.insertStatus(newStatus)
+        Result.success(newStatus)
+    }
+
+    suspend fun deleteStatus(statusId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            statusDao.deleteStatusById(statusId)
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun logout(): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            userDao.clearCurrentUserFlag()
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
 }

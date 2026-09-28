@@ -10,7 +10,22 @@ data class UserEntity(
     val bio: String = "",
     val avatarUrl: String = "",
     val isCurrentUser: Boolean = false,
-    val lastSeen: Long = System.currentTimeMillis()
+    val lastSeen: Long = System.currentTimeMillis(),
+    val password: String = "",
+    val role: String = "MEMBER" // "OWNER", "ADMIN", "MEMBER"
+)
+
+@Entity(tableName = "statuses")
+data class StatusEntity(
+    @PrimaryKey val id: String,
+    val authorUsername: String,
+    val authorDisplayName: String,
+    val authorAvatar: String = "",
+    val text: String = "",
+    val mediaUrl: String? = null,
+    val backgroundColorHex: String = "#0284C7",
+    val createdAt: Long = System.currentTimeMillis(),
+    val expiresAt: Long = System.currentTimeMillis() + 24 * 60 * 60 * 1000L // 24 hours
 )
 
 @Entity(tableName = "chats")

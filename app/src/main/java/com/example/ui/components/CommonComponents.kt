@@ -3,6 +3,8 @@ package com.example.ui.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
@@ -89,16 +91,18 @@ fun TelegramAvatar(
         if (showOnlineDot) {
             Box(
                 modifier = Modifier
-                    .size(size * 0.28f)
+                    .size(size * 0.32f)
                     .align(Alignment.BottomEnd)
                     .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surface)
+                    .background(Color(0xFF070B14))
+                    .padding(2.dp),
+                contentAlignment = Alignment.Center
             ) {
                 Box(
                     modifier = Modifier
-                        .matchParentSize()
+                        .fillMaxSize()
                         .clip(CircleShape)
-                        .background(OnlineGreen)
+                        .background(Color(0xFF00E676))
                 )
             }
         }

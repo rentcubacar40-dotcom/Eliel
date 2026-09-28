@@ -95,4 +95,49 @@ class ExampleRobolectricTest {
         val isCarlosSelfAvailable = repository.checkUsernameAvailability("carlos_ucf", "carlos_ucf")
         assertTrue(isCarlosSelfAvailable)
     }
+
+    @Test
+    fun `test admin login with password ElielElielAdmin543345`() = runBlocking {
+        repository.initializeDefaultsIfNeeded()
+
+        // 1. Wrong admin password fails
+        val wrongLogin = repository.loginUser("Eliel_21", "clave_incorrecta")
+        assertTrue(wrongLogin.isFailure)
+
+        // 2. Correct admin password succeeds and grants OWNER role
+        val adminLogin = repository.loginUser("Eliel_21", "ElielElielAdmin543345..")
+        assertTrue(adminLogin.isSuccess)
+        val adminUser = adminLogin.getOrNull()
+        assertNotNull(adminUser)
+        assertEquals("OWNER", adminUser?.role)
+        assertTrue(adminUser?.isCurrentUser == true)
+    }
+
+    @Test
+    fun `test room local message storage and deletion`() = runBlocking {
+        repository.initializeDefaultsIfNeeded()
+        repository.loginUser("Eliel_21", "ElielElielAdmin543345..")
+
+        // Send local message stored in Room
+        val sendRes = repository.sendMessage(ChatRepository.GENERAL_GROUP_ID, "Mensaje de prueba local")
+        assertTrue(sendRes.isSuccess)
+        val msg = sendRes.getOrNull()
+        assertNotNull(msg)
+
+        // Delete message from Room
+        val delRes = repository.deleteMessage(msg!!.id)
+        assertTrue(delRes.isSuccess)
+    }
+
+    @Test
+    fun `test 24h status publication in room`() = runBlocking {
+        repository.initializeDefaultsIfNeeded()
+        repository.loginUser("Eliel_21", "ElielElielAdmin543345..")
+
+        val statusRes = repository.publishStatus("Estado de bienvenida en Nexus", null, "#0284C7")
+        assertTrue(statusRes.isSuccess)
+        val status = statusRes.getOrNull()
+        assertNotNull(status)
+        assertEquals("Eliel_21", status?.authorUsername)
+    }
 }

@@ -11,9 +11,10 @@ import androidx.room.RoomDatabase
         ChatEntity::class,
         MessageEntity::class,
         MoodleConfigEntity::class,
-        GroupMemberEntity::class
+        GroupMemberEntity::class,
+        StatusEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -22,6 +23,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun messageDao(): MessageDao
     abstract fun moodleConfigDao(): MoodleConfigDao
     abstract fun groupMemberDao(): GroupMemberDao
+    abstract fun statusDao(): StatusDao
 
     companion object {
         @Volatile
